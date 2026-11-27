@@ -64,6 +64,11 @@ MODE_FROST_PROTECTION = "hors"
 # shows that it would be kept.
 MODE_MANUAL = "manual"
 
+# The modes a write may set. ``manual`` and ``program`` were written and read back on real
+# hardware; ``eco`` and ``holiday`` are declared but stay closed: the device then follows a
+# setpoint this library has no proven route to write (eco) or a holiday period it does not set.
+WRITABLE_MODES = ("manual", "program")
+
 # Load state while the radiator is heating.
 WORK_STATE_HEATING = "opened"
 

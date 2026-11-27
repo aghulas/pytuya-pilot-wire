@@ -148,7 +148,7 @@ router.read_keys(device, Channel.LAN)  # the keys a LAN reading is trusted for
 | read power and energy | LAN | proven |
 | read eco / frost setpoints, night mode | developer API, else LAN | proven |
 | read weekly schedule | developer API | proven |
-| on / off, mode, manual setpoint | sharing API | proven (2026-10-31) |
+| on / off, mode (`manual` and `program` only), manual setpoint (in `manual` mode only) | sharing API | proven (2026-10-31) |
 | weekly schedule | developer API | proven (2026-11-14) |
 | holiday setpoint, temperature correction, window detection, child lock | sharing API | candidate, closed |
 | eco / frost setpoints, night mode | — | no route |

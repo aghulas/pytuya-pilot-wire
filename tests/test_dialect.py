@@ -45,7 +45,7 @@ def test_full_state() -> None:
         "local_temperature": 19.5,
         "current_heating_setpoint": 20.0,
         "system_mode": "heat",
-        "preset": "schedule",
+        "preset": "program",
         "running_state": "heat",
         "window_open": False,
         "window_detection": "OFF",
@@ -53,7 +53,7 @@ def test_full_state() -> None:
         "local_temperature_calibration": -1,
         "holiday_temperature": 8.0,
         "eco_temperature": 16.0,
-        "frost_protection_temperature": 7.0,
+        "antifrost_temperature": 7.0,
         "power": 920.0,
         "voltage": 230.0,
         "current": 4.0,
@@ -82,7 +82,7 @@ def test_unread_properties_are_absent() -> None:
 
 def test_frost_protection_and_unknown_mode() -> None:
     frost = dialect.encode_state(state_of(mode="hors", switch=False))
-    assert frost["preset"] == "frost_protection" and frost["system_mode"] == "off"
+    assert frost["preset"] == "antifrost" and frost["system_mode"] == "off"
     unknown = dialect.encode_state(state_of(mode="something_new"))
     assert "preset" not in unknown and unknown["tuya"]["mode"] == "something_new"
 
@@ -103,14 +103,14 @@ def test_decode_commands() -> None:
     commands = dialect.decode_command(
         {
             "system_mode": "off",
-            "preset": "schedule",
+            "preset": "program",
             "current_heating_setpoint": 19.5,
             "child_lock": "LOCK",
             "window_detection": "on",
             "local_temperature_calibration": 2,
             "holiday_temperature": 8,
             "eco_temperature": 16,
-            "frost_protection_temperature": 7,
+            "antifrost_temperature": 7,
         }
     )
     assert [(c.key, c.value) for c in commands] == [
@@ -125,7 +125,7 @@ def test_decode_commands() -> None:
         ("frost_setpoint", 7.0),
     ]
     assert commands[2].property == "current_heating_setpoint"
-    assert dialect.decode_command({"preset": "frost_protection"})[0].value == "hors"
+    assert dialect.decode_command({"preset": "antifrost"})[0].value == "hors"
     assert dialect.decode_command({"child_lock": False})[0].value is False
 
 

@@ -173,6 +173,8 @@ def test_unconfirmed_when_the_device_stops_answering() -> None:
         ("setpoint", "20", "not a number"),
         ("setpoint", True, "not a number"),
         ("mode", "hors", "not one the device declares"),
+        ("mode", "eco", "'eco' is not written: only 'manual' and 'program' are open"),
+        ("mode", "holiday", "'holiday' is not written: only 'manual' and 'program' are open"),
         ("mode", 3, "not one the device declares"),
         ("switch", "on", "expected true or false"),
         ("schedule", {}, "write_schedule"),
