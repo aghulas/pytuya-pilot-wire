@@ -256,7 +256,7 @@ def test_first_poll_publishes_devices_states_and_availability() -> None:
         "preset": "manual",
         "running_state": "heat",
         "eco_temperature": 16.0,
-        "frost_protection_temperature": 7.0,
+        "antifrost_temperature": 7.0,
         "power": 920.0,
         "voltage": 230.0,
         "current": 4.0,
@@ -267,7 +267,7 @@ def test_first_poll_publishes_devices_states_and_availability() -> None:
     assert sources["local_temperature"]["channel"] == "sharing"
     assert sources["power"]["channel"] == "lan"
     assert sources["eco_temperature"]["channel"] == "developer"
-    assert rig.transport.last("tuyapilot2mqtt/Hall 2")["preset"] == "frost_protection"
+    assert rig.transport.last("tuyapilot2mqtt/Hall 2")["preset"] == "antifrost"
     assert rig.transport.last("tuyapilot2mqtt/Hall 1/availability") == {"state": "online"}
     info = rig.transport.last("tuyapilot2mqtt/bridge/info")
     assert {c["state"] for c in info["channels"].values()} == {"ok"}
@@ -445,20 +445,20 @@ def test_set_writes_reads_back_and_publishes_what_was_read() -> None:
     rig = started(writes_enabled=True)
     assert rig.sharing
     rig.transport.clear()
-    rig.send("Hall 1/set", {"current_heating_setpoint": 21.5, "preset": "schedule"})
+    rig.send("Hall 1/set", {"current_heating_setpoint": 21.5, "preset": "program"})
     assert rig.sharing.sent == [
         (T1, [{"code": "temp_set", "value": 215}]),
         (T1, [{"code": "mode", "value": "program"}]),
     ]
     state = rig.transport.last("tuyapilot2mqtt/Hall 1")
-    assert state["current_heating_setpoint"] == 21.5 and state["preset"] == "schedule"
+    assert state["current_heating_setpoint"] == 21.5 and state["preset"] == "program"
     assert rig.response("device/set") == {
         "status": "ok",
         "data": {
             "device": "Hall 1",
             "results": [
                 {"property": "current_heating_setpoint", "value": 21.5, "confirmed": True},
-                {"property": "preset", "value": "schedule", "confirmed": True},
+                {"property": "preset", "value": "program", "confirmed": True},
             ],
         },
     }
@@ -484,7 +484,7 @@ def test_unconfirmed_set_keeps_the_state_read_from_the_device() -> None:
     [
         ("Hall 1", {"child_lock": "LOCK"}, "candidate"),
         ("Hall 1", {"eco_temperature": 16}, "no route"),
-        ("Hall 1", {"preset": "frost_protection"}, "not one the device declares"),
+        ("Hall 1", {"preset": "antifrost"}, "not one the device declares"),
         ("Hall 1", {"current_heating_setpoint": 20.0, "child_lock": "LOCK"}, "candidate"),
         ("Hall 1", {"current_heating_setpoint": 45}, "bounds"),
         ("Hall 1", {"local_temperature": 20}, "read-only"),

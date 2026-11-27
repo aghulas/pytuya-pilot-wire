@@ -26,14 +26,15 @@ DEFINITION_VENDOR = "Tuya"
 DEFINITION_MODEL = "FP Thermostat"
 DEFINITION_DESCRIPTION = "Pilot-wire thermostat"
 
-# Raw Tuya mode to dialect preset. The frost-protection value is reported by the devices outside
-# their declared mode list; a raw mode that is not here gives no preset at all.
+# Raw Tuya mode to dialect preset (names of contract version 2 onwards). The frost-protection
+# value is reported by the devices outside their declared mode list; a raw mode that is not here
+# gives no preset at all.
 PRESETS: dict[str, str] = {
-    "program": "schedule",
+    "program": "program",
     "manual": "manual",
     "eco": "eco",
     "holiday": "holiday",
-    dps.MODE_FROST_PROTECTION: "frost_protection",
+    dps.MODE_FROST_PROTECTION: "antifrost",
 }
 _MODES = {preset: mode for mode, preset in PRESETS.items()}
 
@@ -120,7 +121,7 @@ PROPERTIES: tuple[Property, ...] = (
     Property("local_temperature_calibration", "temperature_correction", _integer, _decode_integer),
     Property("holiday_temperature", "holiday_setpoint", _number, _decode_number),
     Property("eco_temperature", "eco_setpoint", _number, _decode_number),
-    Property("frost_protection_temperature", "frost_setpoint", _number, _decode_number),
+    Property("antifrost_temperature", "frost_setpoint", _number, _decode_number),
     Property("power", "power", _number),
     Property("voltage", "voltage", _number),
     Property(

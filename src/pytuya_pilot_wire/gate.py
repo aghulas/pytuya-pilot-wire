@@ -7,7 +7,8 @@ A write goes through, in this order:
 3. the **router** gives a proven route (or the device is the one designated for a candidate's
    supervised trial);
 4. the device **declares** the setting writable, and the value passes the device's **own bounds
-   and step** (and a ceiling for setpoints), or is one of its declared modes;
+   and step** (and a ceiling for setpoints), or is one of its declared modes that is open to a
+   write (``manual`` or ``program``);
 5. a **fresh read** shows the device online, and for a room setpoint, in ``manual`` mode: in
    ``program`` mode the running schedule slot overwrites it, in frost protection the device
    stores it without applying it, and in ``eco`` or ``holiday`` nothing shows it would be kept;
@@ -183,6 +184,13 @@ class WriteGate:
             if not isinstance(value, str) or value not in spec.modes:
                 raise WriteRefused(
                     f"mode {value!r} is not one the device declares ({', '.join(spec.modes)})"
+                )
+            if value not in dps.WRITABLE_MODES:
+                open_modes = " and ".join(map(repr, dps.WRITABLE_MODES))
+                raise WriteRefused(
+                    f"mode {value!r} is not written: only {open_modes}"
+                    " are open (in eco and holiday the device follows a setpoint with no proven"
+                    " write route)"
                 )
             raw = value
         elif operation in _NUMERIC:
