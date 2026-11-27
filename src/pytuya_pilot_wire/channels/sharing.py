@@ -57,6 +57,8 @@ MIN_INTERVAL = 0.25
 DETAIL_BATCH = 20
 
 _AUTH_CODES = {"1010": "token refused", "1011": "token expired"}
+# Answer to a request signed with keys the account no longer accepts (generic code -9999999).
+_SIGN_INVALID = "sign invalid"
 _MESSAGES = {
     "1013": "timestamp refused: the clock of this machine is off",
     "1106": "permission denied by Tuya",
@@ -281,6 +283,15 @@ class SharingChannel:
             code = str(code)
             if code in _AUTH_CODES:
                 return AuthenticationError(f"{_AUTH_CODES[code]}: log in again", code)
+            message = str(getattr(err, "error_message", "") or "")
+            if _SIGN_INVALID in message.lower():
+                # The session keys no longer sign: another client logged in with the same
+                # application and took the session over (seen on real hardware). Retrying cannot
+                # help; only a new login does.
+                return AuthenticationError(
+                    f"session refused ({_SIGN_INVALID}, another client may hold it): log in again",
+                    code,
+                )
             message = _MESSAGES.get(code) or getattr(err, "error_message", None) or "error"
             return ChannelError(f"Tuya: {message} (code {code})", code)
         if type(err).__module__.split(".")[0] in ("requests", "urllib3") or isinstance(
