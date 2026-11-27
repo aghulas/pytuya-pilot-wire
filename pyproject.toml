@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pytuya-pilot-wire"
-version = "0.0.1"
+version = "0.2.0"
 description = "Tuya pilot-wire thermostats for electric radiators: data points, weekly-schedule codec, channels and guarded writes (unofficial)."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -23,7 +23,12 @@ classifiers = [
 dependencies = []
 
 [project.optional-dependencies]
-dev = ["ruff", "mypy", "pytest", "pytest-cov"]
+sharing = ["tuya-device-sharing-sdk>=0.2.1"]
+lan = ["tinytuya>=1.15"]
+developer = ["tinytuya>=1.15"]
+mqtt = ["paho-mqtt>=2.0,<3"]
+all = ["pytuya-pilot-wire[sharing,lan,developer,mqtt]"]
+dev = ["pytuya-pilot-wire[all]", "ruff", "mypy", "pytest", "pytest-cov", "types-requests"]
 
 [project.urls]
 Homepage = "https://github.com/aghulas/pytuya-pilot-wire"
@@ -46,6 +51,11 @@ select = ["E", "F", "I", "UP", "B", "SIM", "FURB"]
 [tool.mypy]
 python_version = "3.11"
 strict = true
+
+[[tool.mypy.overrides]]
+module = ["tuya_sharing.*", "tinytuya.*"]
+ignore_missing_imports = true
+follow_untyped_imports = false
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
