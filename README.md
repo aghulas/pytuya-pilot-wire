@@ -175,7 +175,9 @@ A write is refused (`WriteRefused`, `RouteRefused`) before anything is sent when
 disabled; the product is not verified for writes; there is no proven route; the device does not
 declare the setting writable; the value is outside the device's own bounds or step, above the
 30 °C setpoint ceiling, or not one of its declared modes; the device is offline; or, for a
-setpoint, the device is in frost-protection mode (it would store the value and not apply it).
+setpoint, the device is in any mode but `manual` (in `program` the running schedule slot
+overwrites a written setpoint; in frost protection the device stores it and does not apply it;
+in `eco` and `holiday` nothing shows it would be kept). Switch the device to `manual` first.
 The command is sent once and never retried. A schedule write is read-modify-write: each part
 keeps the header read from the device, only the parts that differ are written, and the schedule
 is read back.
