@@ -54,3 +54,46 @@ def test_undeclared_mode_is_passed_through() -> None:
 def test_unknown_product() -> None:
     with pytest.raises(KeyError):
         dps.decode_lan("unknown", {})
+
+
+def test_cloud_reading_by_code() -> None:
+    decoded = dps.decode_codes(
+        dps.PRODUCT_FP_THERMOSTAT,
+        {
+            "temp_current": 195,
+            "temp_set": 200,
+            "switch": True,
+            "child_lock": False,
+            "window_check": True,
+            "temp_correction": -2,
+            "hors_temp_set": 70,
+            "eco_temp_set": 160,
+            "night_btn": True,
+            "night_time_start": 960,
+            "work_state": "opened",
+            "work_power": 1500,
+            "unknown_code": 1,
+        },
+    )
+    assert decoded == {
+        "temperature": 19.5,
+        "setpoint": 20.0,
+        "switch": True,
+        "child_lock": False,
+        "window_detection": True,
+        "temperature_correction": -2,
+        "frost_setpoint": 7.0,
+        "eco_setpoint": 16.0,
+        "night_mode": True,
+        "night_start": 960,
+        "work_state": "opened",
+        "heating": True,
+    }
+
+
+def test_key_lookups() -> None:
+    assert dps.code_of(dps.PRODUCT_FP_THERMOSTAT, "setpoint") == "temp_set"
+    assert dps.point_of(dps.PRODUCT_FP_THERMOSTAT, "setpoint").divisor == 10
+    for lookup in (dps.code_of, dps.point_of):
+        with pytest.raises(KeyError):
+            lookup(dps.PRODUCT_FP_THERMOSTAT, "nothing")
