@@ -138,7 +138,7 @@ class GuardedSession:
         self.writing = False
         self._transport = transport
         self._min_interval = min_interval
-        self._last = 0.0
+        self._last: float | None = None
         self._lock = threading.Lock()
         self._inner: Any = None
 
@@ -147,9 +147,10 @@ class GuardedSession:
         check_route(verb, path, self.writing)
         self.counters[f"{verb} {anonymise(path)}"] += 1
         with self._lock:
-            wait = self._min_interval - (time.monotonic() - self._last)
-            if wait > 0:
-                time.sleep(wait)
+            if self._last is not None:
+                wait = self._min_interval - (time.monotonic() - self._last)
+                if wait > 0:
+                    time.sleep(wait)
             self._last = time.monotonic()
         if self._transport is not None:
             return self._transport(verb, url, kwargs)
