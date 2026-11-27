@@ -222,6 +222,8 @@ def test_read_failures() -> None:
     [
         (ApiError("1010"), AuthenticationError, "log in again"),
         (ApiError("1011"), AuthenticationError, "expired"),
+        (ApiError("-9999999", "sign invalid"), AuthenticationError, "refused (sign invalid"),
+        (ApiError("-9999999", "other"), ChannelError, "other (code -9999999)"),
         (ApiError("1106"), ChannelError, "permission denied"),
         (ApiError("9999", "odd"), ChannelError, "odd (code 9999)"),
         (ConnectionError("down"), ChannelUnavailable, "network"),
