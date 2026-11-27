@@ -16,7 +16,7 @@ Unofficial: not affiliated with Tuya.
 Pre-alpha, not on PyPI. Install a tagged version from git, with the extras of the channels used:
 
 ```bash
-pip install "pytuya-pilot-wire[all] @ git+https://github.com/aghulas/pytuya-pilot-wire@v0.1.0"
+pip install "pytuya-pilot-wire[all] @ git+https://github.com/aghulas/pytuya-pilot-wire@v0.2.0"
 ```
 
 | Module | Content | State |
@@ -28,10 +28,12 @@ pip install "pytuya-pilot-wire[all] @ git+https://github.com/aghulas/pytuya-pilo
 | `channels.sharing` | device-sharing API (Smart Life account, QR-code login): discovery, instruction sets, status reads | reads checked on real hardware (2026-11-27) |
 | `channels.lan` | LAN protocol 3.3 through the gateway: every data point of each sub-device, read only | reads checked on real hardware (2026-11-27) |
 | `channels.developer` | developer API (shadow properties): settings, weekly schedule, LAN inventory (gateway key, node ids) | reads checked on real hardware (2026-11-27) |
-| router, write gate, daemon entry point | — | next (`v0.2.0`) |
+| `router` | each operation goes to the channel proven for it, or is refused; candidates are closed | done |
+| `gate` | write gate: verified products, the device's own bounds and step, fresh read, one send, read-back; disabled by default | done on synthetic tests; **no write was sent to real hardware by this library yet** (milestone M4) |
+| `bridge`, `mqtt` | reusable daemon core (read loop, publication of the contract's topics, `/set` and `bridge/request` handling) and a paho transport | read loop checked on real hardware (2026-11-27), writes disabled |
 
 The three channels were read on the reference install on 2026-11-27 and agree with each other on
-every value they share.
+every value they share. The comparison with the vendor app is the owner's to make.
 
 ## Use
 
@@ -125,7 +127,94 @@ dialect.decode_command({"current_heating_setpoint": 19.5})
 ```
 
 `decode_command` only translates. Whether a command has a proven route and an acceptable value is
-the business of the router and the write gate (`v0.2.0`).
+the business of the router and the write gate.
+
+### Router
+
+```python
+from pytuya_pilot_wire import Channel
+from pytuya_pilot_wire.router import Operation, Router
+
+router = Router([Channel.SHARING, Channel.LAN])  # the channels that are configured
+router.route(device, Operation.SETPOINT)  # Channel.SHARING
+router.route(device, Operation.CHILD_LOCK)  # RouteRefused: candidate route, closed …
+router.route(device, Operation.SCHEDULE)  # RouteRefused: the developer channel is not available
+router.read_keys(device, Channel.LAN)  # the keys a LAN reading is trusted for
+```
+
+| Operation | Route | State |
+|---|---|---|
+| read state | sharing API | proven |
+| read power and energy | LAN | proven |
+| read eco / frost setpoints, night mode | developer API, else LAN | proven |
+| read weekly schedule | developer API | proven |
+| on / off, mode, manual setpoint | sharing API | proven (2026-10-31) |
+| weekly schedule | developer API | proven (2026-11-14) |
+| holiday setpoint, temperature correction, window detection, child lock | sharing API | candidate, closed |
+| eco / frost setpoints, night mode | — | no route |
+
+There is no fallback: when the proven channel is missing the operation is refused. A candidate
+opens only for the single device designated for its supervised trial
+(`Router(channels, trials={Operation.CHILD_LOCK: dev_id})`); it becomes proven by a change to the
+table that records the trial.
+
+### Write gate
+
+```python
+from pytuya_pilot_wire.gate import WriteGate
+
+gate = WriteGate(router, sharing=sharing, developer=developer, enabled=True)  # disabled by default
+result = gate.write(device, spec, "setpoint", 19.5)
+result.confirmed  # True once the device reports 19.5; False after 20 s without it
+result.reading  # what was read back: update the state from this, never from the request
+
+gate.write_schedule(device, {"monday": [{"time": "00:00", "temperature": 16.0}]})
+```
+
+A write is refused (`WriteRefused`, `RouteRefused`) before anything is sent when: the gate is
+disabled; the product is not verified for writes; there is no proven route; the device does not
+declare the setting writable; the value is outside the device's own bounds or step, above the
+30 °C setpoint ceiling, or not one of its declared modes; the device is offline; or, for a
+setpoint, the device is in frost-protection mode (it would store the value and not apply it).
+The command is sent once and never retried. A schedule write is read-modify-write: each part
+keeps the header read from the device, only the parts that differ are written, and the schedule
+is read back.
+
+### Daemon core
+
+`Bridge` is everything a bridge daemon does between the channels and MQTT; the daemon itself
+only loads configuration and secrets and builds the channels.
+
+```python
+import threading
+from pytuya_pilot_wire.bridge import Bridge, BridgeConfig
+from pytuya_pilot_wire.mqtt import PahoTransport
+
+config = BridgeConfig(prefix="tuyapilot2mqtt", sharing_interval=60, writes_enabled=False)
+transport = PahoTransport("localhost", 1883, username=user, password=password, prefix=config.prefix)
+bridge = Bridge(transport, sharing=sharing, lan=lan, developer=developer, config=config)
+transport.on_connect = bridge.announce  # bridge/state back to online after a reconnection
+transport.connect()
+bridge.run(threading.Event())  # serves until the event is set
+```
+
+It publishes `bridge/state`, `bridge/info` (versions, state of each channel, routing table),
+`bridge/devices`, each device's state and availability, and answers `<name>/set` (on
+`bridge/response/device/set`) and `bridge/request/schedule/get` / `schedule/set`. Any channel may
+be absent. Rules it keeps:
+
+- every Tuya call runs on the thread that calls `run`; MQTT callbacks only queue;
+- a reading is trusted for the keys proven for its channel, a property that was not read is
+  absent, and a state changes only from a reading;
+- a `/set` payload is validated as a whole before anything is sent;
+- a channel whose credentials are refused is paused until `bridge.replace_channel(...)`; any
+  other failure is retried with a growing delay (15 minutes at most).
+
+`BridgeConfig`: `prefix`, `sharing_interval` (60 s), `lan_interval` (60 s), `developer_interval`
+(1 h), `discovery_interval` (6 h), `stale_after` (600 s without a reading makes a device
+unavailable), `writes_enabled` (false), `names` (`{dev_id: friendly name}`), `trials`,
+`bridge_version`. The transport is anything with `publish(topic, payload, *, retain)` and
+`subscribe(topic, callback)`.
 
 ## Development
 
