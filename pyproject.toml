@@ -1,0 +1,51 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pytuya-pilot-wire"
+version = "0.0.1"
+description = "Tuya pilot-wire thermostats for electric radiators: data points, weekly-schedule codec, channels and guarded writes (unofficial)."
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "aghulas" }]
+keywords = ["tuya", "pilot-wire", "fil-pilote", "thermostat", "electric-heating", "home-assistant", "mqtt"]
+classifiers = [
+  "Development Status :: 2 - Pre-Alpha",
+  "Intended Audience :: Developers",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Topic :: Home Automation",
+  "Typing :: Typed",
+]
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["ruff", "mypy", "pytest", "pytest-cov"]
+
+[project.urls]
+Homepage = "https://github.com/aghulas/pytuya-pilot-wire"
+Repository = "https://github.com/aghulas/pytuya-pilot-wire"
+Issues = "https://github.com/aghulas/pytuya-pilot-wire/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+pytuya_pilot_wire = ["py.typed"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "FURB"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
