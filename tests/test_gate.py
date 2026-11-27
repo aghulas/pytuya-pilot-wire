@@ -246,7 +246,7 @@ def test_other_refusals_before_any_io() -> None:
 
 def test_refusals_from_the_fresh_read() -> None:
     frost = FakeSharing(mode="hors")
-    with pytest.raises(WriteRefused, match="frost-protection"):
+    with pytest.raises(WriteRefused, match="'hors' mode, where it stores a setpoint"):
         gate(frost)[0].write(T1, SPEC, "setpoint", 20.0)
     # mode and on/off stay writable in frost protection: that is how one leaves it
     assert gate(frost)[0].write(T1, SPEC, "mode", "manual").confirmed
@@ -268,6 +268,26 @@ def test_refusals_from_the_fresh_read() -> None:
     with pytest.raises(WriteRefused, match="could not be read"):
         gate(missing)[0].write(T1, SPEC, "setpoint", 20.0)
     assert frost.sent == [(T1.dev_id, [{"code": "mode", "value": "manual"}])]
+
+
+@pytest.mark.parametrize(
+    ("mode", "why"),
+    [
+        ("program", "the running schedule slot overwrites"),
+        ("eco", "nothing shows that a written setpoint is kept"),
+        ("holiday", "nothing shows that a written setpoint is kept"),
+        ("hors", "it stores a setpoint and does not apply it"),
+        ("unexpected", "nothing shows that a written setpoint is kept"),
+    ],
+)
+def test_setpoint_is_written_only_in_manual_mode(mode: str, why: str) -> None:
+    fake = FakeSharing(mode=mode)
+    with pytest.raises(WriteRefused, match=f"{mode}' mode, where {why}.*only in 'manual' mode"):
+        gate(fake)[0].write(T1, SPEC, "setpoint", 20.0)
+    assert fake.sent == [] and fake.reads == 1
+    # the other proven writes do not depend on the mode
+    assert gate(fake)[0].write(T1, SPEC, "mode", "manual").confirmed
+    assert fake.sent == [(T1.dev_id, [{"code": "mode", "value": "manual"}])]
 
 
 def test_a_channel_error_is_not_retried() -> None:

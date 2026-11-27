@@ -58,6 +58,12 @@ DECLARED_MODES = ("eco", "holiday", "program", "manual")
 # stores a setpoint write and does not apply it.
 MODE_FROST_PROTECTION = "hors"
 
+# The only mode in which a written room setpoint is applied and kept. In ``program`` mode the
+# device replaces it with the setpoint of the running schedule slot (seen on real hardware), in
+# frost protection it stores it without applying it, and in ``eco`` and ``holiday`` nothing
+# shows that it would be kept.
+MODE_MANUAL = "manual"
+
 # Load state while the radiator is heating.
 WORK_STATE_HEATING = "opened"
 

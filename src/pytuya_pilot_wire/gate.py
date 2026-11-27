@@ -8,8 +8,9 @@ A write goes through, in this order:
    supervised trial);
 4. the device **declares** the setting writable, and the value passes the device's **own bounds
    and step** (and a ceiling for setpoints), or is one of its declared modes;
-5. a **fresh read** shows the device online, and for a setpoint, not in frost-protection mode,
-   where the device stores the value and does not apply it;
+5. a **fresh read** shows the device online, and for a room setpoint, in ``manual`` mode: in
+   ``program`` mode the running schedule slot overwrites it, in frost protection the device
+   stores it without applying it, and in ``eco`` or ``holiday`` nothing shows it would be kept;
 6. the command is sent **once**, never retried;
 7. the device is **read back** until it reports the value or a timeout passes.
 
@@ -43,6 +44,20 @@ _NUMERIC = frozenset(
 
 CONFIRM_TIMEOUT = 20.0
 CONFIRM_INTERVAL = 2.0
+
+
+def setpoint_mode_refusal(mode: Any) -> str:
+    """Why a room setpoint is refused in ``mode`` (any mode but ``manual``)."""
+    if mode == dps.MODE_FROST_PROTECTION:
+        why = "it stores a setpoint and does not apply it"
+    elif mode == "program":
+        why = "the running schedule slot overwrites a written setpoint"
+    else:
+        why = "nothing shows that a written setpoint is kept"
+    return (
+        f"setpoint: the device is in {mode!r} mode, where {why}; a setpoint is written only in"
+        f" {dps.MODE_MANUAL!r} mode"
+    )
 
 
 class SharingWriter(Protocol):
@@ -211,11 +226,8 @@ class WriteGate:
             mode = before.values.get("mode")
             if mode is None:
                 raise WriteRefused("setpoint: the mode of the device could not be read")
-            if mode == dps.MODE_FROST_PROTECTION:
-                raise WriteRefused(
-                    "setpoint: the device is in frost-protection mode, where it stores a setpoint"
-                    " and does not apply it"
-                )
+            if mode != dps.MODE_MANUAL:
+                raise WriteRefused(setpoint_mode_refusal(mode))
         self._sharing.send(dev_id, [{"code": planned.code, "value": planned.raw}])
         deadline = self._monotonic() + self._timeout
         reading: Reading | None = None

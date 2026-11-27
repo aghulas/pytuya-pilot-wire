@@ -492,7 +492,7 @@ def test_unconfirmed_set_keeps_the_state_read_from_the_device() -> None:
         ("Hall 1", "not json", "not valid JSON"),
         ("Hall 1", "[1]", "not a JSON object"),
         ("Nowhere", {"system_mode": "off"}, "unknown device"),
-        ("Hall 2", {"current_heating_setpoint": 20.0}, "frost-protection"),
+        ("Hall 2", {"current_heating_setpoint": 20.0}, "'hors' mode"),
     ],
 )
 def test_refused_sets_send_nothing(name: str, payload: Any, error: str) -> None:
@@ -502,6 +502,24 @@ def test_refused_sets_send_nothing(name: str, payload: Any, error: str) -> None:
     response = rig.response("device/set")
     assert response["status"] == "error" and error in response["error"]
     assert rig.sharing.sent == []
+
+
+def test_setpoint_in_program_mode_is_refused_before_sending() -> None:
+    rig = started(writes_enabled=True)
+    assert rig.sharing
+    rig.sharing.values[T1]["mode"] = "program"
+    rig.send("Hall 1/set", {"current_heating_setpoint": 20.5})
+    response = rig.response("device/set")
+    assert response["status"] == "error" and "'program' mode" in response["error"]
+    assert "only in 'manual' mode" in response["error"]
+    assert rig.sharing.sent == []
+    # switching to manual first, in the same payload, is the way to write it
+    rig.send("Hall 1/set", {"preset": "manual", "current_heating_setpoint": 20.5})
+    assert rig.sharing.sent == [
+        (T1, [{"code": "mode", "value": "manual"}]),
+        (T1, [{"code": "temp_set", "value": 205}]),
+    ]
+    assert rig.response("device/set")["status"] == "ok"
 
 
 def test_a_trial_opens_one_candidate_on_one_device() -> None:
