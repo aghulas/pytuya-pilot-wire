@@ -1,0 +1,37 @@
+name: Publish to PyPI
+
+# Runs only when a GitHub release is published, and only for a tag whose version is the one in
+# pyproject.toml. PyPI accepts the upload only once a Trusted Publisher is registered there for
+# this repository, this workflow and the `pypi` environment (an owner's step on pypi.org).
+on:
+  release:
+    types: [published]
+
+jobs:
+  pypi-publish:
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/pytuya-pilot-wire
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: The tag is the package version
+        run: |
+          version="$(python -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')"
+          test "${GITHUB_REF_NAME}" = "v${version}"
+
+      - name: Build and check distributions
+        run: |
+          pip install build twine
+          python -m build
+          twine check --strict dist/*
+
+      - name: Publish to PyPI (Trusted Publishing)
+        uses: pypa/gh-action-pypi-publish@release/v1
