@@ -348,7 +348,7 @@ def test_schedule_write_is_read_modify_write() -> None:
     assert list(fake.issued[0]) == ["week_program_18_2_2"]
     assert schedule.part_header(fake.issued[0]["week_program_18_2_2"]) == bytes([0x33] * 12)
     assert result.week["tuesday"] == DAY and result.week["monday"] == NIGHT
-    assert clock.sleeps == [2.0] and fake.reads == 2
+    assert clock.sleeps == [5.0] and fake.reads == 2
 
 
 def test_schedule_already_as_asked_writes_nothing() -> None:
@@ -360,11 +360,11 @@ def test_schedule_already_as_asked_writes_nothing() -> None:
 
 def test_schedule_not_confirmed() -> None:
     fake = FakeDeveloper(week(), deaf=True)
-    made, clock = gate(developer=fake, confirm_timeout=4)
+    made, clock = gate(developer=fake, schedule_timeout=8)
     result = made.write_schedule(T1, {"monday": DAY})  # type: ignore[dict-item]
     assert not result.confirmed and result.week["monday"] == NIGHT
-    assert result.detail == "the schedule read back differs after 4 s"
-    assert len(fake.issued) == 1 and clock.sleeps == [2.0, 2.0]
+    assert result.detail == "the schedule read back differs after 8 s"
+    assert len(fake.issued) == 1 and clock.sleeps == [5.0, 5.0]
 
 
 def test_schedule_refusals() -> None:
