@@ -69,6 +69,14 @@ def _tinytuya_cloud(project: DeveloperProject) -> Any:  # pragma: no cover - rea
     )
 
 
+def _schedule_parts(properties: Mapping[str, Any]) -> dict[str, str]:
+    return {
+        code: value
+        for code, value in properties.items()
+        if _SCHEDULE_CODE.fullmatch(code) and isinstance(value, str) and value
+    }
+
+
 def _check_id(dev_id: str) -> str:
     if not _ID.fullmatch(dev_id):
         raise ChannelError("invalid device id")
@@ -137,20 +145,28 @@ class DeveloperChannel:
         The shadow holds the last value the cloud received for each data point, however old:
         prefer the other channels for what changes often.
         """
-        return Reading(
+        return self.read_with_schedule(device)[0]
+
+    def read_with_schedule(
+        self, device: Device
+    ) -> tuple[Reading, dict[str, list[schedule.Transition]]]:
+        """The decoded properties and the weekly schedule, from **one** call to the API.
+
+        The shadow returns both in the same answer: a reader that wants the schedule along with
+        the settings pays one request, not two. A day with a missing part is absent.
+        """
+        properties = self.properties(device.dev_id)
+        reading = Reading(
             dev_id=device.dev_id,
             channel=Channel.DEVELOPER,
             at=self._clock(),
-            values=dps.decode_codes(device.product_id, self.properties(device.dev_id)),
+            values=dps.decode_codes(device.product_id, properties),
         )
+        return reading, schedule.decode_week(_schedule_parts(properties))
 
     def schedule_parts(self, dev_id: str) -> dict[str, str]:
         """The raw weekly-schedule data points of a device, ``{code: base64}``."""
-        return {
-            code: value
-            for code, value in self.properties(dev_id).items()
-            if _SCHEDULE_CODE.fullmatch(code) and isinstance(value, str) and value
-        }
+        return _schedule_parts(self.properties(dev_id))
 
     def read_schedule(self, dev_id: str) -> dict[str, list[schedule.Transition]]:
         """The weekly schedule, ``{day name: transitions}``. A day with a missing part is absent."""

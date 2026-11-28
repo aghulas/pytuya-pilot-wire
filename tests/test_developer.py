@@ -154,3 +154,11 @@ def test_issue_refuses_anything_but_schedule_parts() -> None:
         channel(FakeCloud({"success": False, "code": 501, "msg": "refused"})).issue_schedule_parts(
             T1, MONDAY
         )
+
+
+def test_read_with_schedule_is_one_call() -> None:
+    cloud = FakeCloud(properties({**MONDAY, "temp_current": 185}))
+    reading, week = channel(cloud).read_with_schedule(DEVICE)
+    assert reading.values["temperature"] == 18.5
+    assert week == {"monday": [{"time": "00:00", "temperature": 16.0}]}
+    assert len(cloud.requests) == 1
