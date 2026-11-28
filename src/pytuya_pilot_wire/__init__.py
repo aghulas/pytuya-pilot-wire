@@ -15,7 +15,7 @@ from .errors import (
 )
 from .model import Bounds, Channel, Device, DeviceSpec, DeviceState, Reading, Sourced
 
-__version__ = "0.3.0"
+__version__ = "0.5.0"
 
 __all__ = [
     "AuthenticationError",

@@ -153,13 +153,16 @@ router.read_keys(device, Channel.LAN)  # the keys a LAN reading is trusted for
 | read weekly schedule | developer API | proven |
 | on / off, mode (`manual` and `program` only), manual setpoint (in `manual` mode only) | sharing API | proven (2026-10-31) |
 | weekly schedule | developer API | proven (2026-11-14) |
+| mode `eco`, `holiday`, frost protection (`hors`, reported outside the declared list) | sharing API | candidates, closed, one route per value |
 | holiday setpoint, temperature correction, window detection, child lock | sharing API | candidate, closed |
-| eco / frost setpoints, night mode | — | no route |
+| eco / frost setpoints | — | no route: the sharing API does not declare them writable |
+| night mode | — | no route |
 
 There is no fallback: when the proven channel is missing the operation is refused. A candidate
-opens only for the single device designated for its supervised trial
-(`Router(channels, trials={Operation.CHILD_LOCK: dev_id})`); it becomes proven by a change to the
-table that records the trial.
+opens only for the single device designated for its supervised trial, named after the write
+(`Router(channels, trials={"child_lock": dev_id, "mode:holiday": dev_id})`, see
+`router.write_name`); it becomes proven by a change to the table that records the trial. The
+mode has a route per value (`router.MODE_ROUTES`): `router.route(device, Operation.MODE, "eco")`.
 
 ### Write gate
 
@@ -177,7 +180,8 @@ gate.write_schedule(device, {"monday": [{"time": "00:00", "temperature": 16.0}]}
 A write is refused (`WriteRefused`, `RouteRefused`) before anything is sent when: the gate is
 disabled; the product is not verified for writes; there is no proven route; the device does not
 declare the setting writable; the value is outside the device's own bounds or step, above the
-30 °C setpoint ceiling, or not one of its declared modes; the device is offline; or, for a
+30 °C setpoint ceiling, or not one of its declared modes (frost protection excepted, once its
+route is open); the device is offline; or, for a
 setpoint, the device is in any mode but `manual` (in `program` the running schedule slot
 overwrites a written setpoint; in frost protection the device stores it and does not apply it;
 in `eco` and `holiday` nothing shows it would be kept). Switch the device to `manual` first.

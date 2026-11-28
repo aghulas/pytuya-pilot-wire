@@ -86,7 +86,8 @@ class BridgeConfig:
     stale_after: float = 600.0
     writes_enabled: bool = False
     names: Mapping[str, str] = field(default_factory=dict)
-    trials: Mapping[Operation, str] = field(default_factory=dict)
+    # Trial designations by write name (``router.write_name``): one device per candidate.
+    trials: Mapping[str, str] = field(default_factory=dict)
     bridge_version: str | None = None
 
 

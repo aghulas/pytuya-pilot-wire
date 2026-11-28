@@ -8,6 +8,16 @@ repository. Unreleased changes are at the top.
 - Packaging for PyPI: a publication workflow (`.github/workflows/publish.yml`, Trusted
   Publishing, on a published GitHub release), `python -m build` and `twine check` in CI.
 
+## 0.5.0 — 2026-11-28
+
+- The mode is routed per raw value (`router.MODE_ROUTES`): `manual` and `program` stay proven;
+  `eco`, `holiday` and the frost-protection value `hors` are closed candidates of their own.
+- Trials are designated by write name (`router.write_name`): `"child_lock"`, `"mode:holiday"`.
+  `BridgeConfig.trials` and `Router(trials=…)` take those names.
+- `hors`, outside the declared mode list, passes the gate only once its route is open.
+- The eco and frost setpoints have no route: the sharing API does not declare them writable.
+- `Router.state()` gives the state of a write's route.
+
 ## 0.3.0 — 2026-11-27
 
 - The write gate writes a mode only to `manual` or `program`. `eco` and `holiday` are declared by

@@ -6,6 +6,11 @@ write the device declares and nobody tried: it stays closed. It opens only for t
 designated for its supervised trial, and becomes proven in a change of its own that records the
 trial. There is no fallback to a channel that merely accepts the call.
 
+The mode is routed per value (:data:`MODE_ROUTES`): ``manual`` and ``program`` are proven, the
+other modes are candidates of their own. A trial is designated by **write name**
+(:func:`write_name`): the operation's value (``"child_lock"``), or ``"mode:<raw mode>"``
+(``"mode:holiday"``) for one mode value.
+
 The table mirrors ``ha-tuya-pilot-wire/docs/architecture.md`` ("Routing") and §4 of the MQTT
 contract.
 """
@@ -65,6 +70,11 @@ _CANDIDATE = Route(
     (Channel.SHARING,), RouteState.CANDIDATE, "declared by the device, never written"
 )
 _PROVEN_WRITE = "written on one thermostat and read back, 2026-10-31"
+_NOT_DECLARED = Route(
+    (),
+    RouteState.NONE,
+    "the sharing API does not declare it writable (developer API shadow property only)",
+)
 
 ROUTES: Mapping[str, Mapping[Operation, Route]] = {
     dps.PRODUCT_FP_THERMOSTAT: {
@@ -89,8 +99,8 @@ ROUTES: Mapping[str, Mapping[Operation, Route]] = {
         Operation.TEMPERATURE_CORRECTION: _CANDIDATE,
         Operation.WINDOW_DETECTION: _CANDIDATE,
         Operation.CHILD_LOCK: _CANDIDATE,
-        Operation.ECO_SETPOINT: _NO_ROUTE,
-        Operation.FROST_SETPOINT: _NO_ROUTE,
+        Operation.ECO_SETPOINT: _NOT_DECLARED,
+        Operation.FROST_SETPOINT: _NOT_DECLARED,
         Operation.NIGHT_MODE: _NO_ROUTE,
         Operation.SCHEDULE: Route(
             (Channel.DEVELOPER,),
@@ -99,6 +109,33 @@ ROUTES: Mapping[str, Mapping[Operation, Route]] = {
         ),
     }
 }
+
+
+_PROVEN_MODE = Route(
+    (Channel.SHARING,),
+    RouteState.PROVEN,
+    "written on one thermostat (2026-10-31), then through the bridge on two (2026-11-28)",
+)
+
+# Routes of the mode, per raw value. A value absent from here has no route.
+MODE_ROUTES: Mapping[str, Mapping[str, Route]] = {
+    dps.PRODUCT_FP_THERMOSTAT: {
+        "manual": _PROVEN_MODE,
+        "program": _PROVEN_MODE,
+        "eco": _CANDIDATE,
+        "holiday": _CANDIDATE,
+        dps.MODE_FROST_PROTECTION: Route(
+            (Channel.SHARING,),
+            RouteState.CANDIDATE,
+            "reported by the device outside its declared modes, never written",
+        ),
+    }
+}
+
+
+def write_name(operation: Operation, mode: str | None = None) -> str:
+    """Name of a write for :class:`Router` trials: ``"child_lock"``, ``"mode:holiday"``."""
+    return f"{operation.value}:{mode}" if operation is Operation.MODE and mode else operation.value
 
 
 # The model keys each read operation is proven to deliver. A channel's reading is trusted for
@@ -130,36 +167,49 @@ READ_KEYS: Mapping[Operation, frozenset[str]] = {
 class Router:
     """Routes an operation to its proven channel among those available, or refuses.
 
-    ``trials`` designates, per candidate operation, the single device on which its supervised
-    trial is run: the candidate is open for that device only. It is empty in normal service.
+    ``trials`` designates, per candidate write (by :func:`write_name`; an :class:`Operation` is
+    its own name), the single device on which its supervised trial is run: the candidate is open
+    for that device only. It is empty in normal service.
     """
 
     def __init__(
         self,
         available: Iterable[Channel],
-        trials: Mapping[Operation, str] | None = None,
+        trials: Mapping[str, str] | None = None,
     ) -> None:
         self.available = frozenset(available)
-        self.trials = dict(trials or {})
+        self.trials: dict[str, str] = {str(name): dev for name, dev in (trials or {}).items()}
 
-    def route(self, device: Device, operation: Operation) -> Channel:
-        """The channel to use, or :class:`RouteRefused`. Nothing else decides where a call goes."""
-        routes = ROUTES.get(device.product_id)
-        if routes is None:
+    def state(self, product_id: str, operation: Operation, mode: str | None = None) -> RouteState:
+        """State of a write's route, before any trial designation."""
+        return self._route_of(product_id, operation, mode).state
+
+    @staticmethod
+    def _route_of(product_id: str, operation: Operation, mode: str | None) -> Route:
+        if operation is Operation.MODE and mode is not None:
+            return MODE_ROUTES.get(product_id, {}).get(mode, _NO_ROUTE)
+        return ROUTES.get(product_id, {}).get(operation, _NO_ROUTE)
+
+    def route(self, device: Device, operation: Operation, mode: str | None = None) -> Channel:
+        """The channel to use, or :class:`RouteRefused`. Nothing else decides where a call goes.
+
+        For a write of the mode, ``mode`` is the raw value to write: each value has its route.
+        """
+        if device.product_id not in ROUTES:
             raise RouteRefused(f"product {device.product_id!r} is not supported")
-        route = routes.get(operation, _NO_ROUTE)
+        route = self._route_of(device.product_id, operation, mode)
+        name = write_name(operation, mode)
         if route.state is RouteState.NONE:
-            raise RouteRefused(f"{operation.value}: no route ({route.record})")
-        if route.state is RouteState.CANDIDATE and self.trials.get(operation) != device.dev_id:
+            raise RouteRefused(f"{name}: no route ({route.record})")
+        if route.state is RouteState.CANDIDATE and self.trials.get(name) != device.dev_id:
             raise RouteRefused(
-                f"{operation.value}: candidate route, closed until its supervised trial"
-                f" ({route.record})"
+                f"{name}: candidate route, closed until its supervised trial ({route.record})"
             )
         for channel in route.channels:
             if channel in self.available:
                 return channel
         needed = " or ".join(channel.value for channel in route.channels)
-        raise RouteRefused(f"{operation.value}: the {needed} channel is not available")
+        raise RouteRefused(f"{name}: the {needed} channel is not available")
 
     def read_keys(self, device: Device, channel: Channel) -> frozenset[str]:
         """The model keys to take from a reading of ``device`` made through ``channel``."""
@@ -175,15 +225,19 @@ class Router:
 
     def describe(self, product_id: str) -> dict[str, dict[str, object]]:
         """The routing table of a product, for diagnostics (``bridge/info``)."""
-        return {
-            operation.value: {
+
+        def entry(route: Route) -> dict[str, object]:
+            return {
                 "state": route.state.value,
                 "channels": [channel.value for channel in route.channels],
                 "available": any(channel in self.available for channel in route.channels),
                 "record": route.record,
             }
-            for operation, route in ROUTES.get(product_id, {}).items()
-        }
+
+        table = {op.value: entry(route) for op, route in ROUTES.get(product_id, {}).items()}
+        for mode, route in MODE_ROUTES.get(product_id, {}).items():
+            table[write_name(Operation.MODE, mode)] = entry(route)
+        return table
 
 
 def operation_of(key: str) -> Operation:

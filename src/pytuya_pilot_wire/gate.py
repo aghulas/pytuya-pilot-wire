@@ -7,8 +7,9 @@ A write goes through, in this order:
 3. the **router** gives a proven route (or the device is the one designated for a candidate's
    supervised trial);
 4. the device **declares** the setting writable, and the value passes the device's **own bounds
-   and step** (and a ceiling for setpoints), or is one of its declared modes that is open to a
-   write (``manual`` or ``program``);
+   and step** (and a ceiling for setpoints), or is a mode the device declares (the
+   frost-protection value, which it reports outside that list, once its own route is open), and
+   the router opens that mode value (each mode value has its own route);
 5. a **fresh read** shows the device online, and for a room setpoint, in ``manual`` mode: in
    ``program`` mode the running schedule slot overwrites it, in frost protection the device
    stores it without applying it, and in ``eco`` or ``holiday`` nothing shows it would be kept;
@@ -37,10 +38,23 @@ VERIFIED_PRODUCTS = frozenset({dps.PRODUCT_FP_THERMOSTAT})
 # Ceiling for a room setpoint, narrower than the device's own 40 °C on purpose (same as the
 # schedule codec).
 SETPOINT_CEILING = schedule.MAX_TEMPERATURE
-_CEILED = frozenset({Operation.SETPOINT, Operation.HOLIDAY_SETPOINT})
+_CEILED = frozenset(
+    {
+        Operation.SETPOINT,
+        Operation.HOLIDAY_SETPOINT,
+        Operation.ECO_SETPOINT,
+        Operation.FROST_SETPOINT,
+    }
+)
 _BOOLEAN = frozenset({Operation.SWITCH, Operation.WINDOW_DETECTION, Operation.CHILD_LOCK})
 _NUMERIC = frozenset(
-    {Operation.SETPOINT, Operation.HOLIDAY_SETPOINT, Operation.TEMPERATURE_CORRECTION}
+    {
+        Operation.SETPOINT,
+        Operation.HOLIDAY_SETPOINT,
+        Operation.TEMPERATURE_CORRECTION,
+        Operation.ECO_SETPOINT,
+        Operation.FROST_SETPOINT,
+    }
 )
 
 CONFIRM_TIMEOUT = 20.0
@@ -163,12 +177,25 @@ class WriteGate:
             raise WriteRefused(f"product {device.product_id!r} is not verified for writes")
         return self.router.route(device, operation)
 
+    def _admit_mode(self, device: Device, spec: DeviceSpec | None, value: Any) -> Channel:
+        """The mode value is one the device declares (or frost protection), and its route opens."""
+        declared = () if spec is None else spec.modes
+        if not isinstance(value, str) or (
+            value not in declared and value != dps.MODE_FROST_PROTECTION
+        ):
+            raise WriteRefused(
+                f"mode {value!r} is not one the device declares ({', '.join(declared)})"
+            )
+        return self.router.route(device, Operation.MODE, value)
+
     def plan(self, device: Device, spec: DeviceSpec | None, key: str, value: Any) -> PlannedWrite:
         """Every check that needs no I/O. Raises :class:`WriteRefused` or :class:`RouteRefused`."""
         operation = operation_of(key)
         if operation is Operation.SCHEDULE:
             raise WriteRefused("the weekly schedule is written with write_schedule")
         channel = self._admit(device, operation)
+        if operation is Operation.MODE:
+            channel = self._admit_mode(device, spec, value)
         if channel is not Channel.SHARING or self._sharing is None:
             raise RouteRefused(f"{operation.value}: the {channel.value} channel cannot write it")
         if spec is None or key not in spec.writable:
@@ -181,18 +208,7 @@ class WriteGate:
                 raise WriteRefused(f"{key}: expected true or false")
             raw = value
         elif operation is Operation.MODE:
-            if not isinstance(value, str) or value not in spec.modes:
-                raise WriteRefused(
-                    f"mode {value!r} is not one the device declares ({', '.join(spec.modes)})"
-                )
-            if value not in dps.WRITABLE_MODES:
-                open_modes = " and ".join(map(repr, dps.WRITABLE_MODES))
-                raise WriteRefused(
-                    f"mode {value!r} is not written: only {open_modes}"
-                    " are open (in eco and holiday the device follows a setpoint with no proven"
-                    " write route)"
-                )
-            raw = value
+            raw = value  # checked by _admit_mode
         elif operation in _NUMERIC:
             bounds = spec.bounds.get(key)
             if bounds is None:
