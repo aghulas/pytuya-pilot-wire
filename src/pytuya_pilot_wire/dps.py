@@ -64,9 +64,9 @@ MODE_FROST_PROTECTION = "hors"
 # shows that it would be kept.
 MODE_MANUAL = "manual"
 
-# The modes proven for a write on real hardware. The others (``eco``, ``holiday`` and frost
-# protection) are candidates with routes of their own (``router.MODE_ROUTES``).
-WRITABLE_MODES = ("manual", "program")
+# The modes proven for a write on real hardware (``router.MODE_ROUTES`` holds the routes, and the
+# frost-protection value, refused by the sharing API, has none).
+WRITABLE_MODES = ("manual", "program", "holiday", "eco")
 
 # Load state while the radiator is heating.
 WORK_STATE_HEATING = "opened"
