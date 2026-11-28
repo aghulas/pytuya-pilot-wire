@@ -484,8 +484,7 @@ def test_unconfirmed_set_keeps_the_state_read_from_the_device() -> None:
     [
         ("Hall 1", {"child_lock": "LOCK"}, "candidate"),
         ("Hall 1", {"eco_temperature": 16}, "no route"),
-        ("Hall 1", {"preset": "antifrost"}, "mode:hors: candidate"),
-        ("Hall 1", {"preset": "holiday"}, "mode:holiday: candidate"),
+        ("Hall 1", {"preset": "antifrost"}, "mode:hors: no route"),
         ("Hall 1", {"current_heating_setpoint": 20.0, "child_lock": "LOCK"}, "candidate"),
         ("Hall 1", {"current_heating_setpoint": 45}, "bounds"),
         ("Hall 1", {"local_temperature": 20}, "read-only"),
@@ -496,6 +495,7 @@ def test_unconfirmed_set_keeps_the_state_read_from_the_device() -> None:
         ("Hall 2", {"current_heating_setpoint": 20.0}, "'hors' mode"),
     ],
 )
+@pytest.mark.usefixtures("candidates")
 def test_refused_sets_send_nothing(name: str, payload: Any, error: str) -> None:
     rig = started(writes_enabled=True)
     assert rig.sharing
@@ -523,6 +523,7 @@ def test_setpoint_in_program_mode_is_refused_before_sending() -> None:
     assert rig.response("device/set")["status"] == "ok"
 
 
+@pytest.mark.usefixtures("candidates")
 def test_a_trial_opens_one_candidate_on_one_device() -> None:
     rig = started(writes_enabled=True, trials={Operation.CHILD_LOCK: T1})
     assert rig.sharing
@@ -533,13 +534,13 @@ def test_a_trial_opens_one_candidate_on_one_device() -> None:
     assert "candidate" in rig.response("device/set")["error"] and len(rig.sharing.sent) == 1
 
 
-def test_a_mode_trial_sends_the_raw_frost_value() -> None:
+def test_eco_and_holiday_are_written_and_the_frost_value_is_not() -> None:
     rig = started(writes_enabled=True, trials={"mode:hors": T1})
     assert rig.sharing
+    rig.send("Hall 1/set", {"preset": "eco"})
+    assert rig.sharing.sent == [(T1, [{"code": "mode", "value": "eco"}])]
     rig.send("Hall 1/set", {"preset": "antifrost"})
-    assert rig.sharing.sent == [(T1, [{"code": "mode", "value": "hors"}])]
-    rig.send("Hall 1/set", {"preset": "holiday"})
-    assert "mode:holiday: candidate" in rig.response("device/set")["error"]
+    assert "mode:hors: no route" in rig.response("device/set")["error"]
     assert len(rig.sharing.sent) == 1
 
 

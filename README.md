@@ -151,10 +151,10 @@ router.read_keys(device, Channel.LAN)  # the keys a LAN reading is trusted for
 | read power and energy | LAN | proven |
 | read eco / frost setpoints, night mode | developer API, else LAN | proven |
 | read weekly schedule | developer API | proven |
-| on / off, mode (`manual` and `program` only), manual setpoint (in `manual` mode only) | sharing API | proven (2026-10-31) |
+| on / off, mode `manual` and `program`, manual setpoint (in `manual` mode only) | sharing API | proven (2026-10-31) |
+| mode `holiday` and `eco`, child lock, window detection, temperature correction, holiday setpoint | sharing API | proven (2026-11-28, trials 3a, 3c, 4a, 4b, 5a, 5b) |
 | weekly schedule | developer API | proven (2026-11-14) |
-| mode `eco`, `holiday`, frost protection (`hors`, reported outside the declared list) | sharing API | candidates, closed, one route per value |
-| holiday setpoint, temperature correction, window detection, child lock | sharing API | candidate, closed |
+| mode frost protection (`hors`, reported outside the declared list) | — | no route: the sharing API refused it (trial 3b) |
 | eco / frost setpoints | — | no route: the sharing API does not declare them writable |
 | night mode | — | no route |
 

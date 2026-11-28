@@ -11,7 +11,7 @@ from pytuya_pilot_wire import dps, schedule
 from pytuya_pilot_wire.errors import ChannelError, RouteRefused, WriteRefused
 from pytuya_pilot_wire.gate import WriteGate
 from pytuya_pilot_wire.model import Bounds, Channel, Device, DeviceSpec, Reading
-from pytuya_pilot_wire.router import Operation, Router
+from pytuya_pilot_wire.router import MODE_ROUTES, Operation, Route, Router, RouteState
 
 T1 = Device("devsynthetic0001", "Room 1", dps.PRODUCT_FP_THERMOSTAT)
 SPEC = DeviceSpec(
@@ -185,9 +185,8 @@ def test_value_refusals(key: str, value: Any, message: str) -> None:
     assert fake.sent == [] and fake.reads == 0
 
 
-@pytest.mark.parametrize(
-    "key", ["holiday_setpoint", "temperature_correction", "window_detection", "child_lock"]
-)
+@pytest.mark.usefixtures("candidates")
+@pytest.mark.parametrize("key", ["window_detection", "child_lock"])
 def test_candidates_stay_closed(key: str) -> None:
     fake = FakeSharing()
     with pytest.raises(RouteRefused, match="candidate"):
@@ -195,35 +194,42 @@ def test_candidates_stay_closed(key: str) -> None:
     assert fake.sent == []
 
 
-@pytest.mark.parametrize("mode", ["eco", "holiday", dps.MODE_FROST_PROTECTION])
-def test_candidate_modes_stay_closed(mode: str) -> None:
+_CANDIDATE_MODE = Route((Channel.SHARING,), RouteState.CANDIDATE, "synthetic candidate")
+
+
+def test_the_frost_value_has_no_route() -> None:
     fake = FakeSharing()
-    with pytest.raises(RouteRefused, match=f"mode:{mode}: candidate"):
-        gate(fake)[0].write(T1, SPEC, "mode", mode)
+    with pytest.raises(RouteRefused, match="mode:hors: no route.*refused it"):
+        gate(fake)[0].write(T1, SPEC, "mode", dps.MODE_FROST_PROTECTION)
+    with pytest.raises(RouteRefused, match="no route"):  # a trial cannot open a route with none
+        gate(fake, router=Router(Channel, {"mode:hors": T1.dev_id}))[0].write(
+            T1, SPEC, "mode", dps.MODE_FROST_PROTECTION
+        )
     assert fake.sent == [] and fake.reads == 0
 
 
-@pytest.mark.parametrize("mode", ["eco", "holiday", dps.MODE_FROST_PROTECTION])
-def test_a_trial_opens_one_mode_for_one_device(mode: str) -> None:
+@pytest.mark.parametrize("mode", ["eco", "holiday"])
+def test_eco_and_holiday_are_proven_and_open_to_any_device(mode: str) -> None:
     fake = FakeSharing(mode="program")
-    router = Router(Channel, {f"mode:{mode}": T1.dev_id})
-    made, _ = gate(fake, router=router)
-    result = made.write(T1, SPEC, "mode", mode)
+    result = gate(fake)[0].write(T1, SPEC, "mode", mode)
     assert result.confirmed and fake.sent == [(T1.dev_id, [{"code": "mode", "value": mode}])]
+
+
+def test_a_trial_opens_a_candidate_mode_for_one_device(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setitem(MODE_ROUTES[dps.PRODUCT_FP_THERMOSTAT], "eco", _CANDIDATE_MODE)
+    monkeypatch.setitem(MODE_ROUTES[dps.PRODUCT_FP_THERMOSTAT], "hors", _CANDIDATE_MODE)
+    fake = FakeSharing(mode="program")
+    with pytest.raises(RouteRefused, match="mode:eco: candidate"):
+        gate(fake)[0].write(T1, SPEC, "mode", "eco")
+    made, _ = gate(fake, router=Router(Channel, {"mode:hors": T1.dev_id}))
+    result = made.write(T1, SPEC, "mode", "hors")  # outside the declared list, once open
+    assert result.confirmed and fake.sent == [(T1.dev_id, [{"code": "mode", "value": "hors"}])]
     other = Device("devsynthetic0002", "Room 2", dps.PRODUCT_FP_THERMOSTAT)
     with pytest.raises(RouteRefused, match="candidate"):
-        made.write(other, SPEC, "mode", mode)
-    others = {"eco", "holiday", dps.MODE_FROST_PROTECTION} - {mode}
-    for closed in others:
-        with pytest.raises(RouteRefused, match="candidate"):
-            made.write(T1, SPEC, "mode", closed)
+        made.write(other, SPEC, "mode", "hors")
+    with pytest.raises(RouteRefused, match="mode:eco: candidate"):
+        made.write(T1, SPEC, "mode", "eco")
     assert made.write(T1, SPEC, "mode", "manual").confirmed  # proven modes stay open
-
-
-def test_the_frost_value_is_refused_by_a_device_that_lists_its_modes_but_not_open() -> None:
-    router = Router(Channel, {"mode:eco": T1.dev_id})
-    with pytest.raises(RouteRefused, match="mode:hors"):
-        gate(FakeSharing(), router=router)[0].write(T1, SPEC, "mode", "hors")
 
 
 @pytest.mark.parametrize("key", ["eco_setpoint", "frost_setpoint", "night_mode", "temperature"])
@@ -232,17 +238,10 @@ def test_no_route(key: str) -> None:
         gate(FakeSharing())[0].write(T1, SPEC, key, 16.0)
 
 
+@pytest.mark.usefixtures("candidates")
 def test_a_trial_opens_a_candidate_and_still_validates() -> None:
     fake = FakeSharing(child_lock=False, temperature_correction=0, holiday_setpoint=8.0)
-    router = Router(
-        Channel,
-        {
-            Operation.CHILD_LOCK: T1.dev_id,
-            Operation.TEMPERATURE_CORRECTION: T1.dev_id,
-            Operation.HOLIDAY_SETPOINT: T1.dev_id,
-        },
-    )
-    made, _ = gate(fake, router=router)
+    made, _ = gate(fake, router=Router(Channel, {Operation.CHILD_LOCK: T1.dev_id}))
     assert made.write(T1, SPEC, "child_lock", True).confirmed
     assert made.write(T1, SPEC, "temperature_correction", -2).confirmed
     assert [commands for _, commands in fake.sent] == [

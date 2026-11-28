@@ -8,6 +8,14 @@ repository. Unreleased changes are at the top.
 - Packaging for PyPI: a publication workflow (`.github/workflows/publish.yml`, Trusted
   Publishing, on a published GitHub release), `python -m build` and `twine check` in CI.
 
+## 0.5.1 — 2026-11-28
+
+- **Proven** on the sharing API by supervised trials through the bridge (records in
+  `ha-tuya-pilot-wire/docs/validation/`): mode `holiday` (trial 3a) and `eco` (3c), child lock
+  (4a), window detection (4b), temperature correction (5a), holiday setpoint (5b).
+- The frost-protection value `hors` has **no route**: the sharing API refused it (trial 3b).
+- No candidate write remains in the table; the candidate and trial machinery is unchanged.
+
 ## 0.5.0 — 2026-11-28
 
 - The mode is routed per raw value (`router.MODE_ROUTES`): `manual` and `program` stay proven;

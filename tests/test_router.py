@@ -61,9 +61,15 @@ def test_no_fallback_to_another_channel() -> None:
         Operation.CHILD_LOCK,
     ],
 )
-def test_candidates_are_closed(operation: Operation) -> None:
-    with pytest.raises(RouteRefused, match="candidate"):
-        ALL.route(T1, operation)
+def test_settings_are_proven(operation: Operation) -> None:
+    assert ALL.route(T1, operation) is Channel.SHARING
+    assert ALL.state(T1.product_id, operation) is RouteState.PROVEN
+
+
+@pytest.mark.usefixtures("candidates")
+def test_candidates_are_closed() -> None:
+    with pytest.raises(RouteRefused, match="child_lock: candidate"):
+        ALL.route(T1, Operation.CHILD_LOCK)
 
 
 @pytest.mark.parametrize(
@@ -76,6 +82,7 @@ def test_no_route(operation: Operation) -> None:
         Router(Channel, {operation: T1.dev_id}).route(T1, operation)
 
 
+@pytest.mark.usefixtures("candidates")
 def test_a_trial_opens_a_candidate_for_one_device_only() -> None:
     router = Router(Channel, {Operation.CHILD_LOCK: T1.dev_id})
     assert router.route(T1, Operation.CHILD_LOCK) is Channel.SHARING
@@ -114,10 +121,11 @@ def test_operation_of() -> None:
 def test_mode_values_have_routes_of_their_own() -> None:
     assert ALL.route(T1, Operation.MODE, "manual") is Channel.SHARING
     assert ALL.route(T1, Operation.MODE, "program") is Channel.SHARING
-    for mode in ("eco", "holiday", dps.MODE_FROST_PROTECTION):
-        assert ALL.state(T1.product_id, Operation.MODE, mode) is RouteState.CANDIDATE
-        with pytest.raises(RouteRefused, match=f"mode:{mode}: candidate"):
-            ALL.route(T1, Operation.MODE, mode)
+    assert ALL.route(T1, Operation.MODE, "holiday") is Channel.SHARING
+    assert ALL.route(T1, Operation.MODE, "eco") is Channel.SHARING
+    assert ALL.state(T1.product_id, Operation.MODE, "hors") is RouteState.NONE
+    with pytest.raises(RouteRefused, match="mode:hors: no route"):
+        ALL.route(T1, Operation.MODE, dps.MODE_FROST_PROTECTION)
     with pytest.raises(RouteRefused, match="mode:comfort: no route"):
         ALL.route(T1, Operation.MODE, "comfort")
     assert set(MODE_ROUTES[dps.PRODUCT_FP_THERMOSTAT]) == {
@@ -129,14 +137,15 @@ def test_mode_values_have_routes_of_their_own() -> None:
     }
 
 
+@pytest.mark.usefixtures("candidates")
 def test_a_mode_trial_is_named_after_its_value() -> None:
     assert write_name(Operation.MODE, "holiday") == "mode:holiday"
     assert write_name(Operation.CHILD_LOCK) == "child_lock"
-    router = Router(Channel, {"mode:holiday": T1.dev_id, Operation.CHILD_LOCK: T2.dev_id})
-    assert router.route(T1, Operation.MODE, "holiday") is Channel.SHARING
+    router = Router(Channel, {"mode:hors": T1.dev_id, Operation.CHILD_LOCK: T2.dev_id})
+    assert router.trials == {"mode:hors": T1.dev_id, "child_lock": T2.dev_id}
     assert router.route(T2, Operation.CHILD_LOCK) is Channel.SHARING
     with pytest.raises(RouteRefused):
-        router.route(T2, Operation.MODE, "holiday")
+        router.route(T1, Operation.CHILD_LOCK)
 
 
 def test_eco_and_frost_setpoints_are_not_declared_by_the_sharing_api() -> None:
@@ -147,5 +156,7 @@ def test_eco_and_frost_setpoints_are_not_declared_by_the_sharing_api() -> None:
 
 def test_describe_lists_the_mode_values() -> None:
     table = ALL.describe(dps.PRODUCT_FP_THERMOSTAT)
-    assert table["mode:holiday"]["state"] == "candidate"
+    assert table["mode:eco"]["state"] == "proven"
+    assert table["mode:hors"]["state"] == "none"
+    assert table["mode:holiday"]["state"] == "proven"
     assert table["mode:manual"]["state"] == "proven"
