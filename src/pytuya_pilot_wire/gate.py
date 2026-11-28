@@ -59,6 +59,10 @@ _NUMERIC = frozenset(
 
 CONFIRM_TIMEOUT = 20.0
 CONFIRM_INTERVAL = 2.0
+# The shadow of the developer API shows a written schedule part once the device reported it:
+# allowed longer than a sharing-API write.
+SCHEDULE_CONFIRM_TIMEOUT = 30.0
+SCHEDULE_CONFIRM_INTERVAL = 5.0
 
 
 def setpoint_mode_refusal(mode: Any) -> str:
@@ -142,6 +146,8 @@ class WriteGate:
         setpoint_ceiling: float = SETPOINT_CEILING,
         confirm_timeout: float = CONFIRM_TIMEOUT,
         confirm_interval: float = CONFIRM_INTERVAL,
+        schedule_timeout: float = SCHEDULE_CONFIRM_TIMEOUT,
+        schedule_interval: float = SCHEDULE_CONFIRM_INTERVAL,
         sleep: Callable[[float], None] = time.sleep,
         monotonic: Callable[[], float] = time.monotonic,
     ) -> None:
@@ -153,6 +159,8 @@ class WriteGate:
         self._ceiling = setpoint_ceiling
         self._timeout = confirm_timeout
         self._interval = confirm_interval
+        self._schedule_timeout = schedule_timeout
+        self._schedule_interval = schedule_interval
         self._sleep = sleep
         self._monotonic = monotonic
 
@@ -321,9 +329,9 @@ class WriteGate:
                 dev_id, ordered, (), True, schedule.decode_week(current), "already as asked"
             )
         self._developer.issue_schedule_parts(dev_id, changed)
-        deadline = self._monotonic() + self._timeout
+        deadline = self._monotonic() + self._schedule_timeout
         while True:
-            self._sleep(self._interval)
+            self._sleep(self._schedule_interval)
             after = self._developer.schedule_parts(dev_id)
             if all(after.get(code) == value for code, value in changed.items()):
                 return ScheduleResult(
@@ -336,5 +344,5 @@ class WriteGate:
                     tuple(sorted(changed)),
                     False,
                     schedule.decode_week(after),
-                    f"the schedule read back differs after {self._timeout:g} s",
+                    f"the schedule read back differs after {self._schedule_timeout:g} s",
                 )
