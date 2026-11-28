@@ -185,9 +185,8 @@ def test_value_refusals(key: str, value: Any, message: str) -> None:
     assert fake.sent == [] and fake.reads == 0
 
 
-@pytest.mark.parametrize(
-    "key", ["holiday_setpoint", "temperature_correction", "window_detection", "child_lock"]
-)
+@pytest.mark.usefixtures("candidates")
+@pytest.mark.parametrize("key", ["window_detection", "child_lock"])
 def test_candidates_stay_closed(key: str) -> None:
     fake = FakeSharing()
     with pytest.raises(RouteRefused, match="candidate"):
@@ -239,17 +238,10 @@ def test_no_route(key: str) -> None:
         gate(FakeSharing())[0].write(T1, SPEC, key, 16.0)
 
 
+@pytest.mark.usefixtures("candidates")
 def test_a_trial_opens_a_candidate_and_still_validates() -> None:
     fake = FakeSharing(child_lock=False, temperature_correction=0, holiday_setpoint=8.0)
-    router = Router(
-        Channel,
-        {
-            Operation.CHILD_LOCK: T1.dev_id,
-            Operation.TEMPERATURE_CORRECTION: T1.dev_id,
-            Operation.HOLIDAY_SETPOINT: T1.dev_id,
-        },
-    )
-    made, _ = gate(fake, router=router)
+    made, _ = gate(fake, router=Router(Channel, {Operation.CHILD_LOCK: T1.dev_id}))
     assert made.write(T1, SPEC, "child_lock", True).confirmed
     assert made.write(T1, SPEC, "temperature_correction", -2).confirmed
     assert [commands for _, commands in fake.sent] == [

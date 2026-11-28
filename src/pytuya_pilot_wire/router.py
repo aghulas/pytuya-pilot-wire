@@ -70,6 +70,16 @@ _CANDIDATE = Route(
     (Channel.SHARING,), RouteState.CANDIDATE, "declared by the device, never written"
 )
 _PROVEN_WRITE = "written on one thermostat and read back, 2026-10-31"
+
+
+def _proven_by(trial: str) -> Route:
+    return Route(
+        (Channel.SHARING,),
+        RouteState.PROVEN,
+        f"written through the bridge on one thermostat and read back, 2026-11-28 (trial {trial})",
+    )
+
+
 _NOT_DECLARED = Route(
     (),
     RouteState.NONE,
@@ -95,10 +105,10 @@ ROUTES: Mapping[str, Mapping[Operation, Route]] = {
         Operation.SWITCH: Route((Channel.SHARING,), RouteState.PROVEN, _PROVEN_WRITE),
         Operation.MODE: Route((Channel.SHARING,), RouteState.PROVEN, _PROVEN_WRITE),
         Operation.SETPOINT: Route((Channel.SHARING,), RouteState.PROVEN, _PROVEN_WRITE),
-        Operation.HOLIDAY_SETPOINT: _CANDIDATE,
-        Operation.TEMPERATURE_CORRECTION: _CANDIDATE,
-        Operation.WINDOW_DETECTION: _CANDIDATE,
-        Operation.CHILD_LOCK: _CANDIDATE,
+        Operation.HOLIDAY_SETPOINT: _proven_by("5b"),
+        Operation.TEMPERATURE_CORRECTION: _proven_by("5a"),
+        Operation.WINDOW_DETECTION: _proven_by("4b"),
+        Operation.CHILD_LOCK: _proven_by("4a"),
         Operation.ECO_SETPOINT: _NOT_DECLARED,
         Operation.FROST_SETPOINT: _NOT_DECLARED,
         Operation.NIGHT_MODE: _NO_ROUTE,

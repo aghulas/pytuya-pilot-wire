@@ -495,6 +495,7 @@ def test_unconfirmed_set_keeps_the_state_read_from_the_device() -> None:
         ("Hall 2", {"current_heating_setpoint": 20.0}, "'hors' mode"),
     ],
 )
+@pytest.mark.usefixtures("candidates")
 def test_refused_sets_send_nothing(name: str, payload: Any, error: str) -> None:
     rig = started(writes_enabled=True)
     assert rig.sharing
@@ -522,6 +523,7 @@ def test_setpoint_in_program_mode_is_refused_before_sending() -> None:
     assert rig.response("device/set")["status"] == "ok"
 
 
+@pytest.mark.usefixtures("candidates")
 def test_a_trial_opens_one_candidate_on_one_device() -> None:
     rig = started(writes_enabled=True, trials={Operation.CHILD_LOCK: T1})
     assert rig.sharing

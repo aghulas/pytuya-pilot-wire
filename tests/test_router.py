@@ -61,9 +61,15 @@ def test_no_fallback_to_another_channel() -> None:
         Operation.CHILD_LOCK,
     ],
 )
-def test_candidates_are_closed(operation: Operation) -> None:
-    with pytest.raises(RouteRefused, match="candidate"):
-        ALL.route(T1, operation)
+def test_settings_are_proven(operation: Operation) -> None:
+    assert ALL.route(T1, operation) is Channel.SHARING
+    assert ALL.state(T1.product_id, operation) is RouteState.PROVEN
+
+
+@pytest.mark.usefixtures("candidates")
+def test_candidates_are_closed() -> None:
+    with pytest.raises(RouteRefused, match="child_lock: candidate"):
+        ALL.route(T1, Operation.CHILD_LOCK)
 
 
 @pytest.mark.parametrize(
@@ -76,6 +82,7 @@ def test_no_route(operation: Operation) -> None:
         Router(Channel, {operation: T1.dev_id}).route(T1, operation)
 
 
+@pytest.mark.usefixtures("candidates")
 def test_a_trial_opens_a_candidate_for_one_device_only() -> None:
     router = Router(Channel, {Operation.CHILD_LOCK: T1.dev_id})
     assert router.route(T1, Operation.CHILD_LOCK) is Channel.SHARING
@@ -130,6 +137,7 @@ def test_mode_values_have_routes_of_their_own() -> None:
     }
 
 
+@pytest.mark.usefixtures("candidates")
 def test_a_mode_trial_is_named_after_its_value() -> None:
     assert write_name(Operation.MODE, "holiday") == "mode:holiday"
     assert write_name(Operation.CHILD_LOCK) == "child_lock"
