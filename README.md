@@ -235,4 +235,4 @@ Tests use synthetic data only: no real device id, key or reading in this reposit
 
 ## License
 
-MIT — see [`LICENSE`](LICENSE).
+MIT — see [`LICENSE`](https://github.com/aghulas/pytuya-pilot-wire/blob/main/LICENSE).
