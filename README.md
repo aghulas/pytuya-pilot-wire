@@ -13,11 +13,14 @@ Unofficial: not affiliated with Tuya.
 
 ## Status
 
-Pre-alpha, not on PyPI. Install a tagged version from git, with the extras of the channels used:
+Pre-alpha. Made for PyPI (`pip install "pytuya-pilot-wire[all]"`), not published there yet;
+until then, install a tagged version from git, with the extras of the channels used:
 
 ```bash
-pip install "pytuya-pilot-wire[all] @ git+https://github.com/aghulas/pytuya-pilot-wire@v0.2.0"
+pip install "pytuya-pilot-wire[all] @ git+https://github.com/aghulas/pytuya-pilot-wire@v0.3.0"
 ```
+
+Changes: [`CHANGELOG.md`](https://github.com/aghulas/pytuya-pilot-wire/blob/main/CHANGELOG.md).
 
 | Module | Content | State |
 |---|---|---|

@@ -19,3 +19,14 @@ jobs:
       - run: ruff check . && ruff format --check .
       - run: mypy src
       - run: pytest -q --cov=pytuya_pilot_wire --cov-fail-under=95
+
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install build twine
+      - run: python -m build
+      - run: twine check --strict dist/*
