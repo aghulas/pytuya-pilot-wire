@@ -5,7 +5,15 @@ import pytest
 from pytuya_pilot_wire import dps
 from pytuya_pilot_wire.errors import RouteRefused
 from pytuya_pilot_wire.model import Channel, Device
-from pytuya_pilot_wire.router import ROUTES, Operation, Router, RouteState, operation_of
+from pytuya_pilot_wire.router import (
+    MODE_ROUTES,
+    ROUTES,
+    Operation,
+    Router,
+    RouteState,
+    operation_of,
+    write_name,
+)
 
 T1 = Device("devsynthetic0001", "Room 1", dps.PRODUCT_FP_THERMOSTAT)
 T2 = Device("devsynthetic0002", "Room 2", dps.PRODUCT_FP_THERMOSTAT)
@@ -101,3 +109,43 @@ def test_operation_of() -> None:
     for key in ("temperature", "read_state", "nothing"):
         with pytest.raises(RouteRefused):
             operation_of(key)
+
+
+def test_mode_values_have_routes_of_their_own() -> None:
+    assert ALL.route(T1, Operation.MODE, "manual") is Channel.SHARING
+    assert ALL.route(T1, Operation.MODE, "program") is Channel.SHARING
+    for mode in ("eco", "holiday", dps.MODE_FROST_PROTECTION):
+        assert ALL.state(T1.product_id, Operation.MODE, mode) is RouteState.CANDIDATE
+        with pytest.raises(RouteRefused, match=f"mode:{mode}: candidate"):
+            ALL.route(T1, Operation.MODE, mode)
+    with pytest.raises(RouteRefused, match="mode:comfort: no route"):
+        ALL.route(T1, Operation.MODE, "comfort")
+    assert set(MODE_ROUTES[dps.PRODUCT_FP_THERMOSTAT]) == {
+        "manual",
+        "program",
+        "eco",
+        "holiday",
+        dps.MODE_FROST_PROTECTION,
+    }
+
+
+def test_a_mode_trial_is_named_after_its_value() -> None:
+    assert write_name(Operation.MODE, "holiday") == "mode:holiday"
+    assert write_name(Operation.CHILD_LOCK) == "child_lock"
+    router = Router(Channel, {"mode:holiday": T1.dev_id, Operation.CHILD_LOCK: T2.dev_id})
+    assert router.route(T1, Operation.MODE, "holiday") is Channel.SHARING
+    assert router.route(T2, Operation.CHILD_LOCK) is Channel.SHARING
+    with pytest.raises(RouteRefused):
+        router.route(T2, Operation.MODE, "holiday")
+
+
+def test_eco_and_frost_setpoints_are_not_declared_by_the_sharing_api() -> None:
+    for operation in (Operation.ECO_SETPOINT, Operation.FROST_SETPOINT):
+        with pytest.raises(RouteRefused, match="does not declare it writable"):
+            ALL.route(T1, operation)
+
+
+def test_describe_lists_the_mode_values() -> None:
+    table = ALL.describe(dps.PRODUCT_FP_THERMOSTAT)
+    assert table["mode:holiday"]["state"] == "candidate"
+    assert table["mode:manual"]["state"] == "proven"

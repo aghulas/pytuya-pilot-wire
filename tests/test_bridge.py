@@ -484,7 +484,8 @@ def test_unconfirmed_set_keeps_the_state_read_from_the_device() -> None:
     [
         ("Hall 1", {"child_lock": "LOCK"}, "candidate"),
         ("Hall 1", {"eco_temperature": 16}, "no route"),
-        ("Hall 1", {"preset": "antifrost"}, "not one the device declares"),
+        ("Hall 1", {"preset": "antifrost"}, "mode:hors: candidate"),
+        ("Hall 1", {"preset": "holiday"}, "mode:holiday: candidate"),
         ("Hall 1", {"current_heating_setpoint": 20.0, "child_lock": "LOCK"}, "candidate"),
         ("Hall 1", {"current_heating_setpoint": 45}, "bounds"),
         ("Hall 1", {"local_temperature": 20}, "read-only"),
@@ -530,6 +531,16 @@ def test_a_trial_opens_one_candidate_on_one_device() -> None:
     assert rig.response("device/set")["status"] == "ok"
     rig.send("Hall 2/set", {"child_lock": "LOCK"})
     assert "candidate" in rig.response("device/set")["error"] and len(rig.sharing.sent) == 1
+
+
+def test_a_mode_trial_sends_the_raw_frost_value() -> None:
+    rig = started(writes_enabled=True, trials={"mode:hors": T1})
+    assert rig.sharing
+    rig.send("Hall 1/set", {"preset": "antifrost"})
+    assert rig.sharing.sent == [(T1, [{"code": "mode", "value": "hors"}])]
+    rig.send("Hall 1/set", {"preset": "holiday"})
+    assert "mode:holiday: candidate" in rig.response("device/set")["error"]
+    assert len(rig.sharing.sent) == 1
 
 
 def test_schedule_requests() -> None:

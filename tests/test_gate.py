@@ -172,9 +172,7 @@ def test_unconfirmed_when_the_device_stops_answering() -> None:
         ("setpoint", 30.5, "above the ceiling"),
         ("setpoint", "20", "not a number"),
         ("setpoint", True, "not a number"),
-        ("mode", "hors", "not one the device declares"),
-        ("mode", "eco", "'eco' is not written: only 'manual' and 'program' are open"),
-        ("mode", "holiday", "'holiday' is not written: only 'manual' and 'program' are open"),
+        ("mode", "comfort", "not one the device declares"),
         ("mode", 3, "not one the device declares"),
         ("switch", "on", "expected true or false"),
         ("schedule", {}, "write_schedule"),
@@ -195,6 +193,37 @@ def test_candidates_stay_closed(key: str) -> None:
     with pytest.raises(RouteRefused, match="candidate"):
         gate(fake)[0].write(T1, SPEC, key, True)
     assert fake.sent == []
+
+
+@pytest.mark.parametrize("mode", ["eco", "holiday", dps.MODE_FROST_PROTECTION])
+def test_candidate_modes_stay_closed(mode: str) -> None:
+    fake = FakeSharing()
+    with pytest.raises(RouteRefused, match=f"mode:{mode}: candidate"):
+        gate(fake)[0].write(T1, SPEC, "mode", mode)
+    assert fake.sent == [] and fake.reads == 0
+
+
+@pytest.mark.parametrize("mode", ["eco", "holiday", dps.MODE_FROST_PROTECTION])
+def test_a_trial_opens_one_mode_for_one_device(mode: str) -> None:
+    fake = FakeSharing(mode="program")
+    router = Router(Channel, {f"mode:{mode}": T1.dev_id})
+    made, _ = gate(fake, router=router)
+    result = made.write(T1, SPEC, "mode", mode)
+    assert result.confirmed and fake.sent == [(T1.dev_id, [{"code": "mode", "value": mode}])]
+    other = Device("devsynthetic0002", "Room 2", dps.PRODUCT_FP_THERMOSTAT)
+    with pytest.raises(RouteRefused, match="candidate"):
+        made.write(other, SPEC, "mode", mode)
+    others = {"eco", "holiday", dps.MODE_FROST_PROTECTION} - {mode}
+    for closed in others:
+        with pytest.raises(RouteRefused, match="candidate"):
+            made.write(T1, SPEC, "mode", closed)
+    assert made.write(T1, SPEC, "mode", "manual").confirmed  # proven modes stay open
+
+
+def test_the_frost_value_is_refused_by_a_device_that_lists_its_modes_but_not_open() -> None:
+    router = Router(Channel, {"mode:eco": T1.dev_id})
+    with pytest.raises(RouteRefused, match="mode:hors"):
+        gate(FakeSharing(), router=router)[0].write(T1, SPEC, "mode", "hors")
 
 
 @pytest.mark.parametrize("key", ["eco_setpoint", "frost_setpoint", "night_mode", "temperature"])
